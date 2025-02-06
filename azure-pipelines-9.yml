@@ -1,34 +1,34 @@
-# ASP.NET
-# Build and test ASP.NET projects.
-# Add steps that publish symbols, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
-
 trigger:
-- main
+  branches:
+    include:
+      - master  
 
-pool:
- name: Amanda curso
+jobs:
+  - job: build
+    displayName: 'Build and Push Docker Image to Docker Hub'
+    pool:
+      name: 'Amanda curso'  
+    steps:
+      - task: PowerShell@2
+        inputs:
+          targetType: inline
+          script: |
+            # Criar o diretório .docker, se não existir
+            New-Item -ItemType Directory -Force -Path "$HOME\.docker"
 
-variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
-  buildConfiguration: 'Release'
+            # Criar o arquivo config.json com credsStore vazio
+            Set-Content -Path "$HOME\.docker\config.json" -Value '{ "credsStore": "" }'
 
-steps:
-- task: NuGetToolInstaller@1
+            # Verificar versão do Docker
+            & "C:\Program Files\Docker\Docker\resources\bin\docker.exe" version
 
-- task: NuGetCommand@2
-  inputs:
-    restoreSolution: '$(solution)'
+            # Fazer login no Docker Hub
+            & "C:\Program Files\Docker\Docker\resources\bin\docker.exe" login -u ${env:DOCKER_USERNAME} -p ${env:DOCKER_PASSWORD}
+            if ($LASTEXITCODE -ne 0) { exit 1 }
 
-- task: VSBuild@1
-  inputs:
-    solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
-
-- task: VSTest@2
-  inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+            # Build e push da imagem Docker com o caminho do contexto de build
+            & "C:\Program Files\Docker\Docker\resources\bin\docker.exe" buildx build --platform linux/amd64 -f $(Build.SourcesDirectory)\Dockerfile -t jpneto90/unyleya_projeto_devops:latest --push $(Build.SourcesDirectory)
+        displayName: 'Build and Push Docker Image'
+        env:
+          DOCKER_USERNAME: $(DOCKER_USERNAME)
+          DOCKER_PASSWORD: $(DOCKER_PASSWORD)
